@@ -36,6 +36,17 @@ const (
 	// InvalidConfirm CopySet to CM
 	InvalidConfirm MessageType = "InvalidConfirm"
 
+	// PingCM primary CM
+	PingCM MessageType = "PingCM"
+	// ReplyPing ...
+	ReplyPing MessageType = "ReplyPing"
+	// Elect when starting election
+	Elect MessageType = "Elect"
+	// Reject election message from lower ID
+	Reject MessageType = "Reject"
+	// Timeout to detect failed CM
+	Timeout MessageType = "Timeout"
+
 	// ReadCopy represents Read access to copy of Page
 	ReadCopy AcessType = "ReadCopy"
 	// WriteOwner represents Write access by owner
@@ -59,6 +70,7 @@ type Message struct {
 	Sender    int
 	Timestamp uint
 	Type      MessageType
+	Content   []*Message
 }
 
 // Node ...
@@ -72,12 +84,6 @@ type Node struct {
 	CMID       int
 	CMStore    CM
 	reportChan chan int
-}
-
-// CM ...
-type CM struct {
-	ReqList  []*Message
-	AllPages map[int]*PageInfo // pageID:PageInfo
 }
 
 // PageInfo ...
@@ -95,10 +101,6 @@ func (n *Node) Run(allNodes []*Node) {
 
 	n.Lock = false
 	n.PageAccess = make(map[int]AcessType)
-
-	if n.CMID == n.ID {
-		n.CMStore = CM{[]*Message{}, make(map[int]*PageInfo)}
-	}
 
 	// set up channels
 	for {
@@ -372,6 +374,16 @@ func (n *Node) startNextRequest() {
 	}
 }
 
+func createNode(id int) *Node {
+	n := &Node{}
+	n.ID = id
+	n.Channel = make(chan Message)
+	n.CMID = 999 // default primary CM
+	n.PageAccess = make(map[int]AcessType)
+
+	return n
+}
+
 // ---- Total Program Order ---- //
 
 func (m *Message) lower(other Message) bool {
@@ -392,35 +404,47 @@ func syncClock(clkSender uint, clkReceiver uint) uint {
 func main() {
 	numRequests, _ := strconv.Atoi(os.Args[1])
 	var s string
-	var numNodes = 11
+	var numNodes = 10
+	var numReplicas = 3
 	var nodes []*Node
+	var cms []*CM
 	clock := uint(0)
 	checkChan := make(chan int)
 
 	// create Nodes
 	for i := 0; i < numNodes; i++ {
-		n := Node{}
-		n.ID = i
-		n.CMID = 0 // default CM
+		n := createNode(i)
 		n.clock = clock
-		n.Channel = make(chan Message)
 		n.reportChan = checkChan
-		nodes = append(nodes, &n)
+		nodes = append(nodes, n)
 	}
 	fmt.Println(numNodes-1, "Clients have been created")
+
+	// create Page
+	page := PageInfo{0, false, numNodes - 1, []int{}}
+	nodes[numNodes-1].PageAccess[0] = ReadOwner // store page with Owner
+
+	// create CM nodes
+	for i := 0; i < numReplicas+1; i++ {
+		n := createNode(999 - i)
+		n.clock = clock
+		n.reportChan = checkChan
+		nodes = append(nodes, n)
+		n.CMStore = *initReplica(n.ID, n.CMID, page)
+		cms = append(cms, &n.CMStore)
+	}
 
 	// run Nodes
 	for i := 0; i < numNodes; i++ {
 		go nodes[i].Run(nodes)
 	}
+
+	// run CM
+	for j := 0; j < len(cms); j++ {
+		go cms[j].Run(cms)
+	}
+
 	time.Sleep(time.Duration(1 * time.Second))
-
-	// create Page
-	page := PageInfo{0, false, numNodes - 1, []int{}}
-	nodes[0].CMStore.AllPages[page.ID] = &page  // add page to CM
-	nodes[numNodes-1].PageAccess[0] = ReadOwner // store page with Owner
-
-	time.Sleep(time.Duration(2 * time.Second))
 
 	fmt.Println("==========")
 	fmt.Println("Starting IVY without fault tolerance.\nNumber of requests:", numRequests)
@@ -431,10 +455,10 @@ func main() {
 	start := time.Now()
 	for i := 0; i < numRequests; i++ {
 		r := ReadQuery
-		if i == 1 || i == 4 || i == 7 {
+		if i == 2 || i == 5 || i == 8 {
 			r = WriteQuery
 		}
-		go nodes[i+1].request(r)
+		go nodes[i].request(r)
 	}
 
 	checkDone := 0
