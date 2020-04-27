@@ -36,8 +36,8 @@ const (
 	// InvalidConfirm CopySet to CM
 	InvalidConfirm MessageType = "InvalidConfirm"
 
-	// PingCM primary CM
-	PingCM MessageType = "PingCM"
+	// Ping primary CM
+	Ping MessageType = "Ping"
 	// ReplyPing ...
 	ReplyPing MessageType = "ReplyPing"
 	// Elect when starting election
@@ -46,6 +46,8 @@ const (
 	Reject MessageType = "Reject"
 	// Timeout to detect failed CM
 	Timeout MessageType = "Timeout"
+	// PriCM newly elected PriCM
+	PriCM MessageType = "PriCM"
 
 	// ReadCopy represents Read access to copy of Page
 	ReadCopy AcessType = "ReadCopy"
@@ -77,7 +79,7 @@ type Message struct {
 type Node struct {
 	ID         int
 	Channel    chan Message
-	Pals       []*Node
+	Pals       map[int]*Node
 	Lock       bool
 	clock      uint
 	PageAccess map[int]AcessType // pageID:accesstype
@@ -96,7 +98,10 @@ type PageInfo struct {
 
 // Run ...
 func (n *Node) Run(allNodes []*Node) {
-	n.Pals = append(n.Pals, allNodes...)
+	// fill up Pals
+	for j := 0; j < len(allNodes); j++ {
+		n.Pals[allNodes[j].ID] = allNodes[j]
+	}
 	fmt.Println("Node", n.ID, "has started")
 
 	n.Lock = false
@@ -117,10 +122,16 @@ func (n *Node) Run(allNodes []*Node) {
 func (n *Node) send(msg Message, dest *Node) {
 	n.clock++
 	msg.Timestamp = n.clock
-	// fmt.Println("Node", n.ID, "sending", msg.Type, "to Node", dest.ID)
+
 	go func() {
-		dest.Channel <- msg
-		return
+		for {
+			select {
+			case dest.Channel <- msg:
+				return
+			default:
+				continue
+			}
+		}
 	}()
 }
 
@@ -226,6 +237,7 @@ func (n *Node) listen(msg Message) {
 	case WriteData:
 		n.PageAccess[msg.Req.Page] = WriteOwner
 		fmt.Println("Node", n.ID, "is now the new Owner of Page", msg.Req.Page)
+		fmt.Println("\n ------ Node", n.ID, "request complete")
 		n.Lock = false
 		msg.Req.Channel <- true
 		time.Sleep(time.Duration(1 * time.Second))
@@ -290,7 +302,7 @@ func (n *Node) addToReqList(msg Message) {
 				return n.CMStore.ReqList[i].lower(*n.CMStore.ReqList[j])
 			})
 
-		fmt.Println("Added Node", msg.Sender, "to queue length: ", len(n.CMStore.ReqList))
+		fmt.Println("Added Node", msg.Sender, "to queue. Length: ", len(n.CMStore.ReqList))
 	}
 
 	// if req received is head of queue
@@ -377,9 +389,10 @@ func (n *Node) startNextRequest() {
 func createNode(id int) *Node {
 	n := &Node{}
 	n.ID = id
-	n.Channel = make(chan Message)
+	n.Channel = make(chan Message, 10)
 	n.CMID = 999 // default primary CM
 	n.PageAccess = make(map[int]AcessType)
+	n.Pals = make(map[int]*Node)
 
 	return n
 }
@@ -435,7 +448,7 @@ func main() {
 	}
 
 	// run Nodes
-	for i := 0; i < numNodes; i++ {
+	for i := 0; i < len(nodes); i++ {
 		go nodes[i].Run(nodes)
 	}
 
@@ -447,8 +460,8 @@ func main() {
 	time.Sleep(time.Duration(1 * time.Second))
 
 	fmt.Println("==========")
-	fmt.Println("Starting IVY without fault tolerance.\nNumber of requests:", numRequests)
-	fmt.Println("CM: Node 0 \nPage owner: Node", numNodes-1)
+	fmt.Println("Starting IVY with fault tolerance.\nNumber of requests:", numRequests)
+	fmt.Println("CM: Node 999 \nPage owner: Node", numNodes-1)
 	fmt.Println("==========")
 	time.Sleep(time.Duration(2 * time.Second))
 

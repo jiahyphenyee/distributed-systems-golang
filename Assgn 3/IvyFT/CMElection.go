@@ -58,7 +58,7 @@ func (cm *CM) Run(cms []*CM) {
 	}
 
 	// periodic ping
-	ticker := time.NewTicker(5 * time.Second)
+	ticker := time.NewTicker(2 * time.Second)
 	// go func() {
 	// 	for range ticker.C {
 	// 		fmt.Printf("CM %d ping Pri", cm.ID)
