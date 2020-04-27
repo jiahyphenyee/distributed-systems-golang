@@ -65,7 +65,7 @@ type Message struct {
 type Node struct {
 	ID         int
 	Channel    chan Message
-	Pals       []*Node
+	Pals       map[int]*Node
 	Lock       bool
 	clock      uint
 	PageAccess map[int]AcessType // pageID:accesstype
@@ -90,7 +90,10 @@ type PageInfo struct {
 
 // Run ...
 func (n *Node) Run(allNodes []*Node) {
-	n.Pals = append(n.Pals, allNodes...)
+	// fill up Pals
+	for j := 0; j < len(allNodes); j++ {
+		n.Pals[allNodes[j].ID] = allNodes[j]
+	}
 	fmt.Println("Node", n.ID, "has started")
 
 	n.Lock = false
@@ -389,52 +392,66 @@ func syncClock(clkSender uint, clkReceiver uint) uint {
 	return clkReceiver + uint(1)
 }
 
+func createNode(id int) *Node {
+	n := &Node{}
+	n.ID = id
+	n.Channel = make(chan Message, 10)
+	n.CMID = 999 // default primary CM
+	n.PageAccess = make(map[int]AcessType)
+	n.Pals = make(map[int]*Node)
+
+	return n
+}
+
 func main() {
 	numRequests, _ := strconv.Atoi(os.Args[1])
 	var s string
-	var numNodes = 11
+	var numNodes = 10
 	var nodes []*Node
 	clock := uint(0)
 	checkChan := make(chan int)
 
 	// create Nodes
 	for i := 0; i < numNodes; i++ {
-		n := Node{}
-		n.ID = i
-		n.CMID = 0 // default CM
+		n := createNode(i)
 		n.clock = clock
-		n.Channel = make(chan Message)
 		n.reportChan = checkChan
-		nodes = append(nodes, &n)
+		nodes = append(nodes, n)
 	}
 	fmt.Println(numNodes-1, "Clients have been created")
 
+	// create CM
+	cm := createNode(999)
+	cm.clock = clock
+	cm.reportChan = checkChan
+	nodes = append(nodes, cm)
+
 	// run Nodes
-	for i := 0; i < numNodes; i++ {
+	for i := 0; i < len(nodes); i++ {
 		go nodes[i].Run(nodes)
 	}
 	time.Sleep(time.Duration(1 * time.Second))
 
 	// create Page
 	page := PageInfo{0, false, numNodes - 1, []int{}}
-	nodes[0].CMStore.AllPages[page.ID] = &page  // add page to CM
-	nodes[numNodes-1].PageAccess[0] = ReadOwner // store page with Owner
+	nodes[numNodes].CMStore.AllPages[page.ID] = &page // add page to CM
+	nodes[numNodes-1].PageAccess[0] = ReadOwner       // store page with Owner
 
-	time.Sleep(time.Duration(2 * time.Second))
+	time.Sleep(time.Duration(1 * time.Second))
 
 	fmt.Println("==========")
 	fmt.Println("Starting IVY without fault tolerance.\nNumber of requests:", numRequests)
-	fmt.Println("CM: Node 0 \nPage owner: Node", numNodes-1)
+	fmt.Println("CM: Node 999 \nPage owner: Node", numNodes-1)
 	fmt.Println("==========")
 	time.Sleep(time.Duration(2 * time.Second))
 
 	start := time.Now()
 	for i := 0; i < numRequests; i++ {
 		r := ReadQuery
-		if i == 1 || i == 4 || i == 7 {
+		if i == 2 || i == 5 || i == 8 {
 			r = WriteQuery
 		}
-		go nodes[i+1].request(r)
+		go nodes[i].request(r)
 	}
 
 	checkDone := 0
