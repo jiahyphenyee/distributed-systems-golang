@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"math/rand"
 	"os"
 	"sort"
 	"strconv"
@@ -48,6 +49,8 @@ const (
 	Timeout MessageType = "Timeout"
 	// PriCM newly elected PriCM
 	PriCM MessageType = "PriCM"
+	//IWon to start answering requests
+	IWon MessageType = "IWon"
 
 	// ReadCopy represents Read access to copy of Page
 	ReadCopy AcessType = "ReadCopy"
@@ -97,11 +100,12 @@ type PageInfo struct {
 }
 
 // Run ...
-func (n *Node) Run(killChan chan bool, allNodes []*Node) {
+func (n *Node) Run(killChan chan bool, allNodes map[int]*Node) {
 	// fill up Pals
-	for j := 0; j < len(allNodes); j++ {
-		n.Pals[allNodes[j].ID] = allNodes[j]
-	}
+	// for j := 0; j < len(allNodes); j++ {
+	// 	n.Pals[allNodes[j].ID] = allNodes[j]
+	// }
+	n.Pals = allNodes
 	fmt.Println("Node", n.ID, "has started")
 
 	n.Lock = false
@@ -112,15 +116,19 @@ func (n *Node) Run(killChan chan bool, allNodes []*Node) {
 	for {
 		select {
 		case msg := <-n.Channel:
-			fmt.Println("DEBUGGING yes i received req")
 			n.listen(msg)
 
 		case msg := <-n.CMStore.Channel:
-			fmt.Println("DEBUGGING yes CM received msg")
 			if msg.Type == PriCM {
 				// update node CM also
 				n.CMID = msg.Sender
 			}
+
+			if msg.Type == IWon {
+				fmt.Println("I JUST WON GNA START REQUESTS")
+				n.startNextRequest()
+			}
+
 			n.CMStore.listen(msg)
 
 		case <-ticker.C:
@@ -144,6 +152,11 @@ func (n *Node) Run(killChan chan bool, allNodes []*Node) {
 					Sender: n.CMStore.ID,
 					Type:   Ping,
 				}
+
+				go func() {
+					n.CMStore.Pals[n.CMID].Channel <- pingMsg
+					return
+				}()
 
 				select {
 				case n.CMStore.Pals[n.CMID].Channel <- pingMsg:
@@ -175,16 +188,8 @@ func (n *Node) send(msg Message, dest *Node) {
 	msg.Timestamp = n.clock
 
 	go func() {
-		fmt.Println("DEBUGG entered send()")
-		for {
-			select {
-			case dest.Channel <- msg:
-				fmt.Println("DEBUGG entered actual send()")
-				return
-			default:
-				continue
-			}
-		}
+		dest.Channel <- msg
+		return
 	}()
 }
 
@@ -222,8 +227,14 @@ func (n *Node) request(msgType MessageType) {
 
 	fmt.Println("\n------ New", msgType, "from Node", n.ID, "at clock:", n.clock)
 	n.Lock = true
-	fmt.Println("DEBUG sending REQ to ", n.CMID)
 	n.send(reqMsg, n.Pals[n.CMID])
+
+	// go func(Message) {
+	// 	fmt.Print("this is the pri i am requesting from", n.CMID)
+	// 	n.Pals[n.CMID].Channel <- reqMsg
+	// 	fmt.Println("sent REQ to ", n.CMID)
+	// 	return
+	// }(reqMsg)
 
 	//wait for replies
 	for {
@@ -375,6 +386,7 @@ func (n *Node) addToReqList(msg Message) {
 
 // check which Request next
 func (n *Node) startNextRequest() {
+	fmt.Println("<<<<<<<<< Length of REQ LIST", len(n.CMStore.ReqList))
 
 	if len(n.CMStore.ReqList) > 0 {
 		nextReq := n.CMStore.ReqList[0]
@@ -443,7 +455,7 @@ func (n *Node) startNextRequest() {
 func createNode(id int) *Node {
 	n := &Node{}
 	n.ID = id
-	n.Channel = make(chan Message, 10)
+	n.Channel = make(chan Message)
 	n.CMID = 999 // default primary CM
 	n.PageAccess = make(map[int]AcessType)
 	n.Pals = make(map[int]*Node)
@@ -473,7 +485,7 @@ func main() {
 	var s string
 	var numNodes = 10
 	var numReplicas = 3
-	var nodes []*Node
+	var nodes = make(map[int]*Node)
 	var cms []*CM
 	var killChans = make(map[int]chan bool) // nodeID:kill channel
 	clock := uint(0)
@@ -484,7 +496,10 @@ func main() {
 		n := createNode(i)
 		n.clock = clock
 		n.reportChan = checkChan
-		nodes = append(nodes, n)
+		nodes[n.ID] = n
+		kc := make(chan bool)
+		killChans[i] = kc
+		go nodes[i].Run(kc, nodes)
 	}
 	fmt.Println(numNodes-1, "Clients have been created")
 
@@ -497,17 +512,21 @@ func main() {
 		n := createNode(999 - i)
 		n.clock = clock
 		n.reportChan = checkChan
-		nodes = append(nodes, n)
+		nodes[n.ID] = n
 		n.CMStore = *initReplica(n.ID, n.CMID, page)
 		cms = append(cms, &n.CMStore)
+
+		kc := make(chan bool)
+		killChans[n.ID] = kc
+		go nodes[n.ID].Run(kc, nodes)
 	}
 
 	// run Nodes
-	for i := 0; i < len(nodes); i++ {
-		kc := make(chan bool)
-		killChans[nodes[i].ID] = kc
-		go nodes[i].Run(kc, nodes)
-	}
+	// for i := 0; i < numNodes; i++ {
+	// 	kc := make(chan bool)
+	// 	killChans[i] = kc
+	// 	go nodes[i].Run(kc, nodes)
+	// }
 
 	// run CM
 	for j := 0; j < len(cms); j++ {
@@ -522,18 +541,29 @@ func main() {
 	fmt.Println("==========")
 	time.Sleep(time.Duration(2 * time.Second))
 
-	// kill the coordinator and simulate detection
+	start := time.Now()
+
+	go func(int, map[int]*Node) {
+		for i := 0; i < numRequests; i++ {
+			r := ReadQuery
+			if i == 2 || i == 5 || i == 8 {
+				r = WriteQuery
+			}
+			go nodes[i].request(r)
+		}
+	}(numRequests, nodes)
+
+	time.Sleep(time.Duration(500 * time.Millisecond))
+
+	// kill the coordinator randomly
+	rand.Seed(time.Now().UnixNano())
+	min := 0
+	max := 2
+	killAt := rand.Intn(max-min+1) + min
+	fmt.Println("!!!!!!!!!!!!!!!!!!!!!!!!!!!", rand.Intn(max-min+1)+min, "seconds")
+	time.Sleep(time.Duration(time.Duration(killAt) * time.Second))
 	killChans[999] <- true
 	fmt.Println("!!KILLING Pri CM!! Node 999")
-
-	start := time.Now()
-	for i := 0; i < numRequests; i++ {
-		r := ReadQuery
-		if i == 2 || i == 5 || i == 8 {
-			r = WriteQuery
-		}
-		go nodes[i].request(r)
-	}
 
 	checkDone := 0
 	go func() {

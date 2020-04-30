@@ -25,7 +25,7 @@ func initReplica(id int, CMPri int, page PageInfo) *CM {
 	cm.ID = id
 	cm.AllPages = make(map[int]*PageInfo)
 	cm.AllPages[page.ID] = &page
-	// cm.Channel = make(chan Message)
+	cm.Channel = make(chan Message)
 	cm.Pri = CMPri
 	cm.Election = false
 	cm.Pals = make(map[int]*CM)
@@ -125,6 +125,8 @@ func (cm *CM) listen(msg Message) {
 			cm.Election = false
 			cm.electReply = make(map[int]int)
 		}
+
+	case IWon:
 	}
 }
 
@@ -173,6 +175,13 @@ func (cm *CM) broadcastWinner() {
 		Sender: cm.ID,
 		Type:   PriCM,
 	}
+
+	iWonMsg := Message{
+		Sender: cm.ID,
+		Type:   IWon,
+	}
+
+	go cm.send(iWonMsg, cm)
 
 	cm.Election = false
 	cm.Pri = cm.ID
