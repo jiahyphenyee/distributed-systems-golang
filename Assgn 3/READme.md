@@ -26,8 +26,8 @@ File with timings can be found at `DS PSET3 Timings`
 1. Run steps 1 & 2 as above
 2. When the print statement
 
-`==================
-99X WON ELECTION. START COMPLETING REQUESTS
+`==================\
+99X WON ELECTION. START COMPLETING REQUESTS\
 ==================`
 
 appears, press `Enter` to simulate nonde revival.
