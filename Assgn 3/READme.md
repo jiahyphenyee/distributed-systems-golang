@@ -8,8 +8,6 @@ Node 999 = CM\
 Node 99x = Replicas\
 Currently there are 3 Replicas. This value can be changed in the `main` function, `var numNodes`
 
-File with timings can be found at `DS PSET3 Timings`
-
 # Q2
 Fault detection is implemented using periodic pinging of the replicas to the Pri CM.\
 Election is implemented using Bully.\
