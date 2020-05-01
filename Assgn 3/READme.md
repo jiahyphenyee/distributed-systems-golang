@@ -39,7 +39,7 @@ On revival, the revived node calls for another election, which is why it takes l
 
 # Running Instructions
 ## Basic Ivy without Replicas
-1. `go run BasicIvy.go [numRequests]` where `numRequests` = number of clients simultaneously requesting
+1. ```go run BasicIvy.go [numRequests]``` where `numRequests` = number of clients simultaneously requesting
 
 ## Fault Tolerant Ivy 
 
@@ -47,18 +47,18 @@ When all requests complete, press `Enter` to terminate the program & pinging.
 
 ### Without Faults
 1. `cd Ivy1`
-2. `go run CM1.go Ivy1.go [numRequests]` where `numRequests` = number of clients simultaneously requesting 
+2. ```go run CM1.go Ivy1.go [numRequests]``` where `numRequests` = number of clients simultaneously requesting 
 
 ### With Faults - Pri CM dies
 1. `cd Ivy2`
-2. `go run CM2.go Ivy2.go 20` as at least 20 nodes are needed to help demonstrate the full simulation
+2. ```go run CM2.go Ivy2.go 20``` as at least 20 nodes are needed to help demonstrate the full simulation
 
 ### With Faults - Pri CM dies and revives
 1. Run steps 1 & 2 as above
 2. When the print statement
 
-`==================
+```==================
 99X WON ELECTION. START COMPLETING REQUESTS
-==================`
+==================```
 
 appears, press `Enter` to simulate nonde revival.
