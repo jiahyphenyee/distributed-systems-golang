@@ -20,7 +20,7 @@ File with timings can be found at `DS PSET3 Timings`
 
 ### With Faults - Pri CM dies
 1. `cd Ivy2`
-2. `go run CM1.go Ivy1.go 20` as at least 20 nodes are needed to help demonstrate the full simulation
+2. `go run CM2.go Ivy2.go 20` as at least 20 nodes are needed to help demonstrate the full simulation
 
 ### With Faults - Pri CM dies and revives
 1. Run steps 1 & 2 as above
