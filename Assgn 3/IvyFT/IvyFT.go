@@ -153,9 +153,9 @@ func (n *Node) Run(killChan chan bool, allNodes map[int]*Node) {
 					Sender: n.CMStore.ID,
 					Type:   Ping,
 				}
+				fmt.Println("Replica", n.ID, "PING CM", n.CMID)
 
 				go func() {
-					fmt.Println("Replica", n.ID, "PING CM", n.CMID)
 					n.CMStore.Pals[n.CMID].Channel <- pingMsg
 					return
 				}()
@@ -473,6 +473,7 @@ func createNode(id int) *Node {
 
 func (n *Node) reset(kc chan bool, allNodes map[int]*Node) {
 	n.CMStore.ReqList = []*Message{}
+	n.Channel = make(chan Message)
 	n.Run(kc, allNodes)
 
 }
@@ -498,7 +499,7 @@ func syncClock(clkSender uint, clkReceiver uint) uint {
 func main() {
 	numRequests, _ := strconv.Atoi(os.Args[1])
 	var s string
-	var numNodes = 10
+	var numNodes = 20
 	var numReplicas = 3
 	var nodes = make(map[int]*Node)
 	var cms []*CM
