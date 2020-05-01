@@ -48,6 +48,8 @@ const (
 	Timeout MessageType = "Timeout"
 	// PriCM newly elected PriCM
 	PriCM MessageType = "PriCM"
+	//IWon to start answering requests
+	IWon MessageType = "IWon"
 
 	// ReadCopy represents Read access to copy of Page
 	ReadCopy AcessType = "ReadCopy"
@@ -97,41 +99,100 @@ type PageInfo struct {
 }
 
 // Run ...
-func (n *Node) Run(allNodes []*Node) {
+func (n *Node) Run(killChan chan bool, allNodes map[int]*Node) {
 	// fill up Pals
-	for j := 0; j < len(allNodes); j++ {
-		n.Pals[allNodes[j].ID] = allNodes[j]
-	}
+	// for j := 0; j < len(allNodes); j++ {
+	// 	n.Pals[allNodes[j].ID] = allNodes[j]
+	// }
+	n.Pals = allNodes
 	fmt.Println("Node", n.ID, "has started")
 
 	n.Lock = false
 	n.PageAccess = make(map[int]AcessType)
+	ticker := time.NewTicker(1000 * time.Millisecond)
 
 	// set up channels
 	for {
 		select {
 		case msg := <-n.Channel:
 			n.listen(msg)
+
+		case msg := <-n.CMStore.Channel:
+			if msg.Type == PriCM {
+				// update node CM also
+				n.CMID = msg.Sender
+				for j := 0; j < len(n.Pals)-4; j++ {
+					n.Pals[j].CMID = msg.Sender
+				}
+			}
+
+			if msg.Type == IWon {
+				fmt.Println("I JUST WON GNA START REQUESTS")
+				n.startNextRequest()
+			}
+
+			n.CMStore.listen(msg)
+
+		case <-ticker.C:
+
+			if n.CMStore.ID != n.CMStore.Pri && n.CMStore.ID > 900 {
+				timeout := make(chan bool, 1)
+				go func() {
+					time.Sleep(TimeoutDur)
+					timeout <- true
+				}()
+
+				r := Request{
+					Requester: n.CMStore.ID,
+					ReqType:   Ping,
+					Channel:   make(chan (bool)),
+				}
+
+				pingMsg := Message{
+					Req:    r,
+					Sender: n.CMStore.ID,
+					Type:   Ping,
+				}
+
+				go func() {
+					fmt.Println("Replica", n.ID, "PING CM", n.CMID)
+					n.CMStore.Pals[n.CMID].Channel <- pingMsg
+					return
+				}()
+
+				select {
+				case n.CMStore.Pals[n.CMID].Channel <- pingMsg:
+					continue
+				case <-timeout:
+					// start election
+					timeoutMsg := Message{
+						Sender: n.CMStore.Pri,
+						Type:   Timeout,
+					}
+					n.CMStore.send(timeoutMsg, &n.CMStore)
+				}
+			}
+
+		case <-killChan:
+			fmt.Println("I'm getting killed!")
+			return
+
 		default:
 			continue
 		}
 	}
+
 }
 
 // send msgs
 func (n *Node) send(msg Message, dest *Node) {
 	n.clock++
 	msg.Timestamp = n.clock
+	fmt.Println("Node", n.ID, "sending", msg.Type, "to Node", dest.ID)
 
 	go func() {
-		for {
-			select {
-			case dest.Channel <- msg:
-				return
-			default:
-				continue
-			}
-		}
+		dest.Channel <- msg
+		return
 	}()
 }
 
@@ -181,6 +242,8 @@ func (n *Node) request(msgType MessageType) {
 				Sender: n.ID,
 				Type:   confirmType,
 			}
+
+			fmt.Println("REQ Channel for node", n.ID)
 			n.send(confirmMsg, n.Pals[n.CMID])
 			n.reportChan <- 1
 			return
@@ -195,7 +258,7 @@ func (n *Node) request(msgType MessageType) {
 func (n *Node) listen(msg Message) {
 	n.clock = syncClock(msg.Timestamp, n.clock)
 	// fmt.Println("Node", n.ID, "Clock updated to", n.clock)
-	fmt.Println("Node", n.ID, "received", msg.Type, "from Node", msg.Sender)
+	// fmt.Println("Node", n.ID, "received", msg.Type, "from Node", msg.Sender)
 	switch msg.Type {
 	case ReadQuery:
 		n.addToReqList(msg)
@@ -255,6 +318,7 @@ func (n *Node) listen(msg Message) {
 			}
 		}
 		n.CMStore.AllPages[msg.Req.Page].Lock = false
+		time.Sleep(time.Duration(1 * time.Second))
 		n.startNextRequest()
 
 	case WriteConfirm:
@@ -308,7 +372,7 @@ func (n *Node) addToReqList(msg Message) {
 	// if req received is head of queue
 	if len(n.CMStore.ReqList) == 1 || n.CMStore.ReqList[0] == &msg {
 		fmt.Println("Queue Head = Node", msg.Sender)
-
+		time.Sleep(time.Duration(1 * time.Second))
 		n.startNextRequest()
 
 	} else {
@@ -321,6 +385,7 @@ func (n *Node) addToReqList(msg Message) {
 
 // check which Request next
 func (n *Node) startNextRequest() {
+	// fmt.Println("<<<<<<<<< Length of REQ LIST", len(n.CMStore.ReqList))
 
 	if len(n.CMStore.ReqList) > 0 {
 		nextReq := n.CMStore.ReqList[0]
@@ -329,7 +394,7 @@ func (n *Node) startNextRequest() {
 
 		if nextReq.Type == ReadQuery {
 			// if ReadQuery request
-			fmt.Println("\nStarting ReadQuery by Node", nextReq.Sender)
+			fmt.Println("CM", n.ID, "\nStarting ReadQuery by Node", nextReq.Sender)
 			n.CMStore.AllPages[nextReq.Req.Page].CopySet = append(n.CMStore.AllPages[nextReq.Req.Page].CopySet, nextReq.Sender)
 			n.CMStore.AllPages[nextReq.Req.Page].Lock = true
 			forwardMsg := Message{
@@ -341,7 +406,7 @@ func (n *Node) startNextRequest() {
 
 		} else if nextReq.Type == WriteQuery {
 			// if WriteQuery request
-			fmt.Println("\nStarting WriteQuery by Node", nextReq.Sender)
+			fmt.Println("CM", n.ID, "\nStarting WriteQuery by Node", nextReq.Sender)
 			n.CMStore.AllPages[nextReq.Req.Page].Lock = true
 			invMsg := Message{
 				Req:    nextReq.Req,
@@ -389,7 +454,7 @@ func (n *Node) startNextRequest() {
 func createNode(id int) *Node {
 	n := &Node{}
 	n.ID = id
-	n.Channel = make(chan Message, 10)
+	n.Channel = make(chan Message)
 	n.CMID = 999 // default primary CM
 	n.PageAccess = make(map[int]AcessType)
 	n.Pals = make(map[int]*Node)
@@ -419,17 +484,21 @@ func main() {
 	var s string
 	var numNodes = 10
 	var numReplicas = 3
-	var nodes []*Node
+	var nodes = make(map[int]*Node)
 	var cms []*CM
+	var killChans = make(map[int]chan bool) // nodeID:kill channel
 	clock := uint(0)
 	checkChan := make(chan int)
 
-	// create Nodes
+	// create Client Nodes
 	for i := 0; i < numNodes; i++ {
 		n := createNode(i)
 		n.clock = clock
 		n.reportChan = checkChan
-		nodes = append(nodes, n)
+		nodes[n.ID] = n
+		kc := make(chan bool)
+		killChans[i] = kc
+		go nodes[i].Run(kc, nodes)
 	}
 	fmt.Println(numNodes-1, "Clients have been created")
 
@@ -442,15 +511,21 @@ func main() {
 		n := createNode(999 - i)
 		n.clock = clock
 		n.reportChan = checkChan
-		nodes = append(nodes, n)
+		nodes[n.ID] = n
 		n.CMStore = *initReplica(n.ID, n.CMID, page)
 		cms = append(cms, &n.CMStore)
+
+		kc := make(chan bool)
+		killChans[n.ID] = kc
+		go nodes[n.ID].Run(kc, nodes)
 	}
 
 	// run Nodes
-	for i := 0; i < len(nodes); i++ {
-		go nodes[i].Run(nodes)
-	}
+	// for i := 0; i < numNodes; i++ {
+	// 	kc := make(chan bool)
+	// 	killChans[i] = kc
+	// 	go nodes[i].Run(kc, nodes)
+	// }
 
 	// run CM
 	for j := 0; j < len(cms); j++ {
@@ -466,13 +541,31 @@ func main() {
 	time.Sleep(time.Duration(2 * time.Second))
 
 	start := time.Now()
-	for i := 0; i < numRequests; i++ {
-		r := ReadQuery
-		if i == 2 || i == 5 || i == 8 {
-			r = WriteQuery
+
+	go func(int, map[int]*Node) {
+		for i := 0; i < numRequests; i++ {
+			r := ReadQuery
+			if i == 2 || i == 5 || i == 8 {
+				r = WriteQuery
+			}
+			go nodes[i].request(r)
 		}
-		go nodes[i].request(r)
-	}
+	}(numRequests, nodes)
+
+	// time.Sleep(time.Duration(1000 * time.Millisecond))
+
+	// kill the coordinator randomly
+	// rand.Seed(time.Now().UnixNano())
+	// min := 0
+	// max := 2
+	// killAt := rand.Intn(max-min+1) + min
+
+	// for len(nodes[999].CMStore.ReqList) == numRequests {
+	// 	fmt.Println("!!!!!!!!!!!!!!!!!!!!!!!!!!!", rand.Intn(max-min+1)+min, "seconds")
+	// 	time.Sleep(time.Duration(time.Duration(killAt) * time.Second))
+	// 	killChans[999] <- true
+	// 	fmt.Println("!!KILLING Pri CM!! Node 999")
+	// }
 
 	checkDone := 0
 	go func() {
@@ -491,7 +584,12 @@ func main() {
 		fmt.Println("Time elapsed:", elapsed)
 		fmt.Println("==========")
 
+		return
 	}()
+
+	fmt.Scanln(&s)
+	killChans[999] <- true
+	fmt.Println("!!!!!!!!!KILLED Pri CM!! Node 999")
 
 	fmt.Scanln(&s)
 }

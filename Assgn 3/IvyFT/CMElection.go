@@ -35,30 +35,13 @@ func initReplica(id int, CMPri int, page PageInfo) *CM {
 // Run ...
 func (cm *CM) Run(cms []*CM) {
 
-	// fill up Pals & get primary CM
-	var pri *CM
+	// fill up Pals
 	for j := 0; j < len(cms); j++ {
 		cm.Pals[cms[j].ID] = cms[j]
-		if cms[j].ID == cm.Pri {
-			pri = cms[j]
-		}
-
-	}
-
-	r := Request{
-		Requester: cm.ID,
-		ReqType:   Ping,
-		Channel:   make(chan (bool)),
-	}
-
-	pingMsg := Message{
-		Req:    r,
-		Sender: cm.ID,
-		Type:   Ping,
 	}
 
 	// periodic ping
-	ticker := time.NewTicker(2 * time.Second)
+	// ticker := time.NewTicker(500 * time.Millisecond)
 	// go func() {
 	// 	for range ticker.C {
 	// 		fmt.Printf("CM %d ping Pri", cm.ID)
@@ -82,43 +65,11 @@ func (cm *CM) Run(cms []*CM) {
 	// 		}
 	// 	}
 	// }()
-
-	// set up channels
-	for {
-		select {
-		case msg := <-cm.Channel:
-			cm.listen(msg)
-
-		case <-ticker.C:
-			if cm.ID != cm.Pri {
-				timeout := make(chan bool, 1)
-				go func() {
-					time.Sleep(TimeoutDur)
-					timeout <- true
-				}()
-
-				select {
-				case pri.Channel <- pingMsg:
-					continue
-				case <-timeout:
-					// start election
-					timeoutMsg := Message{
-						Sender: cm.Pri,
-						Type:   Timeout,
-					}
-					cm.send(timeoutMsg, cm)
-				}
-			}
-
-		default:
-			continue
-		}
-	}
 }
 
 // handle messages received
 func (cm *CM) listen(msg Message) {
-	fmt.Println(">>>>>CM", cm.ID, "received", msg.Type, "from CM", msg.Sender)
+	// fmt.Println("CM", cm.ID, "received", msg.Type, "from CM", msg.Sender)
 
 	switch msg.Type {
 	case Ping:
@@ -129,6 +80,7 @@ func (cm *CM) listen(msg Message) {
 			Type:    ReplyPing,
 			Content: cm.ReqList,
 		}
+		fmt.Println("+++++++++++sending back my whole req list of length", len(cm.ReqList), "to cm", msg.Sender)
 		cm.send(consistencyMsg, cm.Pals[msg.Sender])
 
 	case ReplyPing:
@@ -157,8 +109,6 @@ func (cm *CM) listen(msg Message) {
 			if cm.Pri == msg.Sender {
 				fmt.Println("Replica", cm.ID, "detects Pri CM", msg.Sender, "Timed out!")
 				cm.startElection()
-			} else {
-				panic(fmt.Sprintln("who the heck timeout me"))
 			}
 		}
 
@@ -176,6 +126,8 @@ func (cm *CM) listen(msg Message) {
 			cm.Election = false
 			cm.electReply = make(map[int]int)
 		}
+
+	case IWon:
 	}
 }
 
@@ -189,7 +141,11 @@ func (cm *CM) send(msg Message, dest *CM) {
 
 // start election
 func (cm *CM) startElection() {
-	fmt.Println("CM", cm.ID, "started an election")
+	if cm.Pri == cm.ID {
+		return
+	}
+
+	fmt.Println("\nCM", cm.ID, "started an election")
 	cm.electReply = make(map[int]int)
 	cm.Election = true
 	highest := true
@@ -221,9 +177,16 @@ func (cm *CM) broadcastWinner() {
 		Type:   PriCM,
 	}
 
+	iWonMsg := Message{
+		Sender: cm.ID,
+		Type:   IWon,
+	}
+
+	go cm.send(iWonMsg, cm)
+
 	cm.Election = false
 	cm.Pri = cm.ID
-	fmt.Println("Replica", cm.ID, "is now the new Pri CM")
+	fmt.Println("\nReplica", cm.ID, "is now the new Pri CM")
 
 	for _, pal := range cm.Pals {
 		go cm.send(broadcastMsg, pal)
