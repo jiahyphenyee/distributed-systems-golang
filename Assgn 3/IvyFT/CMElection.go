@@ -80,7 +80,7 @@ func (cm *CM) listen(msg Message) {
 			Type:    ReplyPing,
 			Content: cm.ReqList,
 		}
-		fmt.Println("+++++++++++sending back my whole req list of length", len(cm.ReqList), "to cm", msg.Sender)
+		fmt.Println("CM Broadcast Req List of length", len(cm.ReqList), "to cm", msg.Sender)
 		cm.send(consistencyMsg, cm.Pals[msg.Sender])
 
 	case ReplyPing:

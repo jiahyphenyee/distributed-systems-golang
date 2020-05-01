@@ -101,9 +101,7 @@ type PageInfo struct {
 // Run ...
 func (n *Node) Run(killChan chan bool, allNodes map[int]*Node) {
 	// fill up Pals
-	// for j := 0; j < len(allNodes); j++ {
-	// 	n.Pals[allNodes[j].ID] = allNodes[j]
-	// }
+
 	n.Pals = allNodes
 	fmt.Println("Node", n.ID, "has started")
 
@@ -121,6 +119,7 @@ func (n *Node) Run(killChan chan bool, allNodes map[int]*Node) {
 			if msg.Type == PriCM {
 				// update node CM also
 				n.CMID = msg.Sender
+				fmt.Println("\nNEW pri registered: ", n.CMID)
 				for j := 0; j < len(n.Pals)-4; j++ {
 					n.Pals[j].CMID = msg.Sender
 				}
@@ -134,6 +133,7 @@ func (n *Node) Run(killChan chan bool, allNodes map[int]*Node) {
 			n.CMStore.listen(msg)
 
 		case <-ticker.C:
+			fmt.Println("")
 
 			if n.CMStore.ID != n.CMStore.Pri && n.CMStore.ID > 900 {
 				timeout := make(chan bool, 1)
@@ -221,37 +221,29 @@ func (n *Node) request(msgType MessageType) {
 		}
 	}
 
-	var confirmType MessageType
-	if msgType == ReadQuery {
-		confirmType = ReadConfirm
-	} else {
-		confirmType = WriteConfirm
-	}
+	// var confirmType MessageType
+	// if msgType == ReadQuery {
+	// 	confirmType = ReadConfirm
+	// } else {
+	// 	confirmType = WriteConfirm
+	// }
 
 	fmt.Println("\n------ New", msgType, "from Node", n.ID, "at clock:", n.clock)
 	n.Lock = true
 	n.send(reqMsg, n.Pals[n.CMID])
 
 	//wait for replies
-	for {
-		select {
-		case <-r.Channel:
-			// R/W request done
-			confirmMsg := Message{
-				Req:    reqMsg.Req,
-				Sender: n.ID,
-				Type:   confirmType,
-			}
+	// for {
+	// 	select {
+	// 	case <-r.Channel:
+	// 		// R/W request done
+	// 		n.reportChan <- 1
+	// 		return
 
-			fmt.Println("REQ Channel for node", n.ID)
-			n.send(confirmMsg, n.Pals[n.CMID])
-			n.reportChan <- 1
-			return
-
-		default:
-			continue
-		}
-	}
+	// 	default:
+	// 		continue
+	// 	}
+	// }
 }
 
 // listen and handles messages received
@@ -294,7 +286,17 @@ func (n *Node) listen(msg Message) {
 		n.PageAccess[msg.Req.Page] = ReadCopy
 		n.Lock = false
 		fmt.Println("\n ------ Node", n.ID, "request complete")
-		msg.Req.Channel <- true
+		// msg.Req.Channel <- true
+		n.reportChan <- 1
+
+		confirmMsg := Message{
+			Req:    msg.Req,
+			Sender: n.ID,
+			Type:   ReadConfirm,
+		}
+
+		n.send(confirmMsg, n.Pals[n.CMID])
+
 		time.Sleep(time.Duration(1 * time.Second))
 
 	case WriteData:
@@ -302,7 +304,18 @@ func (n *Node) listen(msg Message) {
 		fmt.Println("Node", n.ID, "is now the new Owner of Page", msg.Req.Page)
 		fmt.Println("\n ------ Node", n.ID, "request complete")
 		n.Lock = false
-		msg.Req.Channel <- true
+		// msg.Req.Channel <- true
+		n.reportChan <- 1
+
+		confirmMsg := Message{
+			Req:    msg.Req,
+			Sender: n.ID,
+			Type:   WriteConfirm,
+		}
+
+		fmt.Println("REQ Channel for node", n.ID)
+		n.send(confirmMsg, n.Pals[n.CMID])
+
 		time.Sleep(time.Duration(1 * time.Second))
 
 	case ReadConfirm:
@@ -462,6 +475,12 @@ func createNode(id int) *Node {
 	return n
 }
 
+func (n *Node) reset(kc chan bool, allNodes map[int]*Node) {
+	n.CMStore.ReqList = []*Message{}
+	n.Run(kc, allNodes)
+
+}
+
 // ---- Total Program Order ---- //
 
 func (m *Message) lower(other Message) bool {
@@ -482,7 +501,7 @@ func syncClock(clkSender uint, clkReceiver uint) uint {
 func main() {
 	numRequests, _ := strconv.Atoi(os.Args[1])
 	var s string
-	var numNodes = 10
+	var numNodes = 20
 	var numReplicas = 3
 	var nodes = make(map[int]*Node)
 	var cms []*CM
@@ -519,13 +538,6 @@ func main() {
 		killChans[n.ID] = kc
 		go nodes[n.ID].Run(kc, nodes)
 	}
-
-	// run Nodes
-	// for i := 0; i < numNodes; i++ {
-	// 	kc := make(chan bool)
-	// 	killChans[i] = kc
-	// 	go nodes[i].Run(kc, nodes)
-	// }
 
 	// run CM
 	for j := 0; j < len(cms); j++ {
@@ -587,9 +599,15 @@ func main() {
 		return
 	}()
 
+	// press ENTER to kill
 	fmt.Scanln(&s)
 	killChans[999] <- true
 	fmt.Println("!!!!!!!!!KILLED Pri CM!! Node 999")
+
+	// restart node
+	fmt.Scanln(&s)
+	go nodes[999].reset(killChans[999], nodes)
+	fmt.Println("!!!!!!!!!REVIVED Pri CM!! Node 999")
 
 	fmt.Scanln(&s)
 }
