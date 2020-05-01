@@ -119,7 +119,7 @@ func (n *Node) Run(killChan chan bool, allNodes map[int]*Node) {
 			if msg.Type == PriCM {
 				// update node CM also
 				n.CMID = msg.Sender
-				fmt.Println("\nNEW pri registered: ", n.CMID)
+				fmt.Println(n.ID, "++++++++NEW pri registered: ", n.CMID)
 				for j := 0; j < len(n.Pals)-4; j++ {
 					n.Pals[j].CMID = msg.Sender
 				}
@@ -297,8 +297,6 @@ func (n *Node) listen(msg Message) {
 
 		n.send(confirmMsg, n.Pals[n.CMID])
 
-		time.Sleep(time.Duration(1 * time.Second))
-
 	case WriteData:
 		n.PageAccess[msg.Req.Page] = WriteOwner
 		fmt.Println("Node", n.ID, "is now the new Owner of Page", msg.Req.Page)
@@ -315,8 +313,6 @@ func (n *Node) listen(msg Message) {
 
 		fmt.Println("REQ Channel for node", n.ID)
 		n.send(confirmMsg, n.Pals[n.CMID])
-
-		time.Sleep(time.Duration(1 * time.Second))
 
 	case ReadConfirm:
 		// remove from CM ReqList
@@ -498,10 +494,11 @@ func syncClock(clkSender uint, clkReceiver uint) uint {
 }
 
 // ---- MAIN ---- //
+
 func main() {
 	numRequests, _ := strconv.Atoi(os.Args[1])
 	var s string
-	var numNodes = 20
+	var numNodes = 10
 	var numReplicas = 3
 	var nodes = make(map[int]*Node)
 	var cms []*CM
