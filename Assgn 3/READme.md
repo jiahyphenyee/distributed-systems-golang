@@ -39,7 +39,7 @@ On revival, the revived node calls for another election, which is why it takes l
 
 # Running Instructions
 ## Basic Ivy without Replicas
-1. `go run Ivy.go [numRequests]` where `numRequests` = number of clients simultaneously requesting
+1. `go run BasicIvy.go [numRequests]` where `numRequests` = number of clients simultaneously requesting
 
 ## Fault Tolerant Ivy 
 
