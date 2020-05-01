@@ -1,7 +1,7 @@
 Koe Jia Yee 1003017
 
 # PSET3
-Total number of clients in network (excl.CM) = 10\
+Total number of clients in network (excl.CM) = 10 to 20\
 This value can be changed in the `main` function, `var numNodes`
 
 Node 999 = CM\
