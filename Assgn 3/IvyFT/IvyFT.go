@@ -110,7 +110,7 @@ func (n *Node) Run(killChan chan bool, allNodes map[int]*Node) {
 
 	n.Lock = false
 	n.PageAccess = make(map[int]AcessType)
-	ticker := time.NewTicker(1000 * time.Millisecond)
+	ticker := time.NewTicker(3000 * time.Millisecond)
 
 	// set up channels
 	for {
@@ -125,6 +125,11 @@ func (n *Node) Run(killChan chan bool, allNodes map[int]*Node) {
 				// fmt.Println(n.ID, "++++++++ NEW pri registered: ", n.CMID)
 				for j := 0; j < len(n.Pals)-4; j++ {
 					n.Pals[j].CMID = msg.Sender
+				}
+
+				for j := 0; j < len(n.CMStore.Pals); j++ {
+					fmt.Println("changing my pals' PRI, replica", 999-j)
+					n.Pals[999-j].CMID = msg.Sender
 				}
 			}
 
@@ -158,7 +163,7 @@ func (n *Node) Run(killChan chan bool, allNodes map[int]*Node) {
 					Sender: n.CMStore.ID,
 					Type:   Ping,
 				}
-				fmt.Println("Replica", n.ID, "PING CM", n.CMID)
+				// fmt.Println("Replica", n.ID, "PING CM", n.CMID)
 
 				go func() {
 					n.CMStore.Pals[n.CMID].Channel <- pingMsg
@@ -390,7 +395,7 @@ func (n *Node) addToReqList(msg Message) {
 		for i := 0; i < len(n.CMStore.Pals); i++ {
 			id = 999 - i
 			if id != n.ID {
-				fmt.Println("CM", n.ID, "Broadcast Req List of length", len(n.CMStore.ReqList), "to replica", id)
+				// fmt.Println("CM", n.ID, "Broadcast Req List of length", len(n.CMStore.ReqList), "to replica", id)
 				n.CMStore.send(broadcastReqMsg, n.CMStore.Pals[id])
 			}
 		}
@@ -505,6 +510,7 @@ func (n *Node) reset(kc chan bool, allNodes map[int]*Node) {
 	n.Channel = make(chan Message)
 	n.CMStore.Channel = make(chan Message)
 	n.Run(kc, allNodes)
+	fmt.Println("on revive, my CM is", n.CMID)
 
 }
 
@@ -638,12 +644,16 @@ func main() {
 	// fmt.Scanln(&s)
 	wg.Wait()
 	killChans[999] <- true
+	fmt.Println("\n\n==================")
 	fmt.Println("!!!!!!!!!KILLED Pri CM!! Node 999")
+	fmt.Println("==================")
 
 	// ENTER restart node
 	fmt.Scanln(&s)
 	go nodes[999].reset(killChans[999], nodes)
-	fmt.Println("!!!!!!!!!REVIVED Pri CM!! Node 999")
+	fmt.Println("\n\n==================")
+	fmt.Println("REVIVED Pri CM!! Node 999")
+	fmt.Println("==================")
 
 	fmt.Scanln(&s)
 }

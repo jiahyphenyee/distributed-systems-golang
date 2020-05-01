@@ -69,7 +69,7 @@ func (cm *CM) Run(cms []*CM) {
 
 // handle messages received
 func (cm *CM) listen(msg Message) {
-	// fmt.Println("CM", cm.ID, "received", msg.Type, "from CM", msg.Sender)
+	fmt.Println("CM", cm.ID, "received", msg.Type, "from CM", msg.Sender)
 
 	switch msg.Type {
 	case Ping:
@@ -102,6 +102,7 @@ func (cm *CM) listen(msg Message) {
 	case Timeout:
 		// can either be no reply during election
 		// or timeout from ping to Pri CM
+		fmt.Println(cm.ID, "eLECTION STATUS IS", cm.Election)
 		switch cm.Election {
 		case true:
 			cm.checkElectResult(msg.Sender)
@@ -134,7 +135,7 @@ func (cm *CM) listen(msg Message) {
 
 // send msgs
 func (cm *CM) send(msg Message, dest *CM) {
-	fmt.Println("CM", msg.Sender, "sending", msg.Type, "to cm", dest.ID)
+	// fmt.Println("CM", msg.Sender, "sending", msg.Type, "to cm", dest.ID)
 
 	go func() {
 		dest.Channel <- msg
