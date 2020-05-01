@@ -74,16 +74,17 @@ func (cm *CM) listen(msg Message) {
 	switch msg.Type {
 	case Ping:
 		// send request list
-		consistencyMsg := Message{
-			Req:     msg.Req,
-			Sender:  cm.ID,
-			Type:    ReplyPing,
-			Content: cm.ReqList,
+		replyMsg := Message{
+			Req:    msg.Req,
+			Sender: cm.ID,
+			Type:   ReplyPing,
 		}
-		fmt.Println("CM", cm.ID, "Broadcast Req List of length", len(cm.ReqList), "to cm", msg.Sender)
-		cm.send(consistencyMsg, cm.Pals[msg.Sender])
+
+		cm.send(replyMsg, cm.Pals[msg.Sender])
 
 	case ReplyPing:
+
+	case UpdateReq:
 		cm.ReqList = msg.Content
 
 	case Elect:
@@ -133,6 +134,8 @@ func (cm *CM) listen(msg Message) {
 
 // send msgs
 func (cm *CM) send(msg Message, dest *CM) {
+	fmt.Println("CM", msg.Sender, "sending", msg.Type, "to cm", dest.ID)
+
 	go func() {
 		dest.Channel <- msg
 		return
