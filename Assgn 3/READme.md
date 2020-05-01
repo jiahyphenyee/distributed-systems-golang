@@ -57,8 +57,8 @@ When all requests complete, press `Enter` to terminate the program & pinging.
 1. Run steps 1 & 2 as above
 2. When the print statement
 
-```==================
+`==================
 99X WON ELECTION. START COMPLETING REQUESTS
-==================```
+==================`
 
 appears, press `Enter` to simulate nonde revival.
