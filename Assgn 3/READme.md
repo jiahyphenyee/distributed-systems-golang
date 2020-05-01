@@ -42,6 +42,9 @@ On revival, the revived node calls for another election, which is why it takes l
 1. `go run Ivy.go [numRequests]` where `numRequests` = number of clients simultaneously requesting
 
 ## Fault Tolerant Ivy 
+
+When all requests complete, press `Enter` to terminate the program & pinging.
+
 ### Without Faults
 1. `cd Ivy1`
 2. `go run CM1.go Ivy1.go [numRequests]` where `numRequests` = number of clients simultaneously requesting 
