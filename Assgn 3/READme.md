@@ -13,9 +13,9 @@ File with timings can be found at `DS PSET3 Timings`
 
 ## Fault Tolerant Ivy 
 ### Without Faults
-1. `cd IvyFT`
-2. `go run CMElection.go IvyFT.go [numRequests]` where `numRequests` = number of clients simultaneously requesting 
+1. `cd Ivy1`
+2. `go run CM1.go Ivy1.go [numRequests]` where `numRequests` = number of clients simultaneously requesting 
 
 ### With Faults
-
-
+1. `cd Ivy2`
+2. `go run CM1.go Ivy1.go 20` as at least 20 nodes are needed to help demonstrate the full simulation
