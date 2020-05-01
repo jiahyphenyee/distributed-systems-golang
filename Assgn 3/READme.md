@@ -8,21 +8,6 @@ Node 999 = CM\
 Node 99x = Replicas\
 Currently there are 3 Replicas. This value can be changed in the `main` function, `var numNodes`
 
-# Q2
-Fault detection is implemented using periodic pinging of the replicas to the Pri CM.\
-Election is implemented using Bully.\
-Broadcasting of requests to replicas is done every time a new requests is added to the Pri CM's queue.
-
-# Q3
-It preserves sequential consistency if the CM successfully broadcasts all requests to all the replicas. 
-
-All the client machines execute their requests according to program order. Requests are served using a FIFO queue given that the go routine, which is a single thread,  is listening to messages sent to the channel. The primary CM orders the read and write requests in an array. It then broadcasts the requests list to all the secondary replicas which maintains that order. Hence, all machines will observe results according to some total order.
-
-However, under certain conditions, sequential consistency is not guaranteed: 
-
-- If the broadcasted requests are not sent successfully to the replicas, not all servers will see the same total order. 
-- If the replica fails temporarily. After it revives, the messages it failed to receive are not retrieved anymore, thus violating sequential consistency.  
-
 # Running Instructions
 ## Basic Ivy without Replicas
 1. ```go run BasicIvy.go [numRequests]``` where `numRequests` = number of clients simultaneously requesting
