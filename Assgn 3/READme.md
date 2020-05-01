@@ -6,7 +6,7 @@ This value can be changed in the `main` function, `var numNodes`
 
 Node 999 = CM\
 Node 99x = Replicas\
-Currently there are 3 Replicas. This value can be changed in the `main` function, `var numNodes`
+Currently there are 3 Replicas. This value can be changed in the `main` function, `var numReplicas`
 
 # Running Instructions
 ## Basic Ivy without Replicas
