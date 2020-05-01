@@ -198,7 +198,7 @@ func (n *Node) Run(killChan chan bool, allNodes map[int]*Node) {
 func (n *Node) send(msg Message, dest *Node) {
 	n.clock++
 	msg.Timestamp = n.clock
-	fmt.Println("Node", n.ID, "sending", msg.Type, "to Node", dest.ID)
+	// fmt.Println("Node", n.ID, "sending", msg.Type, "to Node", dest.ID)
 
 	go func() {
 		dest.Channel <- msg
@@ -640,12 +640,11 @@ func main() {
 		return
 	}()
 
-	// press ENTER to kill
 	// fmt.Scanln(&s)
 	wg.Wait()
 	killChans[999] <- true
 	fmt.Println("\n\n==================")
-	fmt.Println("!!!!!!!!!KILLED Pri CM!! Node 999")
+	fmt.Println("KILLED Pri CM!! Node 999")
 	fmt.Println("==================")
 
 	// ENTER restart node
