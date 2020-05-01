@@ -474,6 +474,7 @@ func createNode(id int) *Node {
 func (n *Node) reset(kc chan bool, allNodes map[int]*Node) {
 	n.CMStore.ReqList = []*Message{}
 	n.Channel = make(chan Message)
+	n.CMStore.Channel = make(chan Message)
 	n.Run(kc, allNodes)
 
 }
