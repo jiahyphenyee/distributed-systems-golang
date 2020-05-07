@@ -1,4 +1,4 @@
-## Lamport Logical Vlock
+## Lamport Logical Clock
 1. Open terminal and navigate to directory containing Lamport.go
 2. In main(), edit `var numClient` to change number of clients in network (minimum 3)
 3. In terminal, enter `go run Lamport.go`
