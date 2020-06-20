@@ -1,6 +1,8 @@
 distributed-systems-golang
 
 # Distributed Systems Protocols
+Implemented purely with Golang
+
 1. Bully Election
 2. Lamport Logical Clock
 3. Vector Clocks
